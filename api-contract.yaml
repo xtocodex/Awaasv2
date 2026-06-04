@@ -1,0 +1,439 @@
+openapi: 3.0.3
+info:
+  title: AWAAS Dashboard API
+  version: 0.1.0
+  description: >
+    Contract between the AWAAS web dashboard (React SPA) and the backend.
+    The dashboard NEVER touches Postgres/ClickHouse/Firestore directly — it only
+    calls these endpoints. The backend validates the bearer token, derives role +
+    project scope, and returns data already scoped to what the caller may see.
+    Build the dashboard against this contract with mock data; flip VITE_USE_MOCK
+    to point at the real implementation later.
+
+servers:
+  - url: https://api.awaas.example/v1
+    description: Production (later)
+  - url: http://localhost:5173/__mock__
+    description: Mock adapter served by the SPA during development
+
+# ---------------------------------------------------------------------------
+# AUTH
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Role:
+      type: string
+      enum: [awaas_admin, builder, cxo, sales_head, sales_exec]
+      description: >
+        Maps onto NB roles for navigation: admin->awaas_admin (all-projects/internal),
+        builder->builder/cxo (inventory analytics), sales_manager->sales_head (team),
+        member has NO web access and never receives a token.
+
+    Scope:
+      type: object
+      properties:
+        project_ids:
+          type: array
+          items: { type: string }
+        salesperson_id:
+          type: string
+          nullable: true
+
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        scope: { $ref: '#/components/schemas/Scope' }
+        user:
+          type: object
+          properties:
+            email: { type: string }
+            name: { type: string }
+            company_name: { type: string, nullable: true }
+
+    RiskBand:
+      type: string
+      enum: [GREEN, AMBER, RED]
+    DropOffRisk:
+      type: string
+      enum: [LOW, MEDIUM, HIGH]
+
+    ProjectSummary:
+      type: object
+      properties:
+        project_id: { type: string }
+        name: { type: string }
+        location: { type: string }
+        price_band: { type: string }
+        flat_count: { type: integer }
+
+    ProjectOverview:
+      type: object
+      properties:
+        engagement_score: { type: number, example: 68 }
+        engagement_trend_pct: { type: number, example: 5 }
+        drop_off_risk: { $ref: '#/components/schemas/DropOffRisk' }
+        drop_off_pct: { type: number, example: 22 }
+        top_buyer_driver:
+          type: object
+          properties:
+            feature: { type: string, example: Sunlight }
+            influence_pct: { type: number, example: 61 }
+        weakest_area:
+          type: object
+          properties:
+            room: { type: string, example: Kitchen }
+            avg_dwell_pct: { type: number, example: 6 }
+        session_count: { type: integer, example: 247 }
+        avg_duration_sec: { type: integer, example: 754 }
+        sparkline:
+          type: array
+          items: { type: number }
+
+    FlatTile:
+      type: object
+      properties:
+        flat_id: { type: string }
+        flat_number: { type: string, example: 3BHK-1204 }
+        config: { type: string, example: 3BHK }
+        engagement_score: { type: number }
+        risk: { $ref: '#/components/schemas/RiskBand' }
+        trend_pct: { type: number }
+        primary_issue: { type: string }
+        suggested_action: { type: string }
+
+    FlatDeepDive:
+      type: object
+      properties:
+        flat_number: { type: string }
+        engagement_trend:
+          type: array
+          items: { type: number }
+        drop_off_rate: { type: number }
+        session_count: { type: integer }
+        room_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              room: { type: string }
+              pct: { type: number }
+        issues:
+          type: array
+          items: { type: string }
+        suggested_actions:
+          type: array
+          items:
+            type: object
+            properties:
+              text: { type: string }
+              impact: { type: string, enum: [high, medium, low] }
+
+    SegmentInsights:
+      type: object
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+            properties:
+              segment: { type: string, example: IT professionals }
+              rooms:
+                type: object
+                additionalProperties: { type: number }
+        feature_sensitivity:
+          type: array
+          items:
+            type: object
+            properties:
+              feature: { type: string }
+              score_pct: { type: number }
+
+    ActionRecommendation:
+      type: object
+      properties:
+        id: { type: string }
+        flat_id: { type: string }
+        problem: { type: string }
+        fix: { type: string }
+        priority: { type: string, enum: [high, medium, low] }
+        status: { type: string, enum: [open, actioned, assigned] }
+
+    SalesSummary:
+      type: object
+      properties:
+        sessions_handled: { type: integer }
+        avg_engagement: { type: number }
+        conversion_corr: { type: number }
+        prompt_usage_pct: { type: number }
+        archetype_breakdown:
+          type: object
+          properties:
+            exploratory: { type: number }
+            comparative: { type: number }
+            confirmatory: { type: number }
+            disengaged: { type: number }
+        top_objections:
+          type: array
+          items: { type: string }
+
+    TeamSummary:
+      type: object
+      properties:
+        reps:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              sessions: { type: integer }
+              avg_engagement: { type: number }
+              prompt_usage_pct: { type: number }
+              completion_pct: { type: number }
+              conversion_corr: { type: number }
+
+    DataHealth:
+      type: object
+      properties:
+        sessions_per_project:
+          type: array
+          items:
+            type: object
+            properties:
+              project_id: { type: string }
+              count: { type: integer }
+              trend_pct: { type: number }
+        event_completeness_pct: { type: number }
+        sync_failure_rate: { type: number }
+        alerts:
+          type: array
+          items: { type: string }
+
+    RenderComparison:
+      type: object
+      properties:
+        panoramic:
+          type: object
+          properties:
+            avg_engagement: { type: number }
+            avg_completion: { type: number }
+            session_count: { type: integer }
+        threeD:
+          type: object
+          properties:
+            avg_engagement: { type: number }
+            avg_completion: { type: number }
+            session_count: { type: integer }
+
+    Error:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Email + password login. Server verifies hash; returns scoped token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/me:
+    get:
+      summary: Validate token on app load, return role + scope.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+
+  /projects:
+    get:
+      summary: Projects visible to the caller (scoped by token).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProjectSummary' }
+
+  /projects/{id}/overview:
+    get:
+      summary: Builder/CXO overview KPI strip data.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: date_range, in: query, schema: { type: string, example: last_30_days } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectOverview' }
+
+  /projects/{id}/flats:
+    get:
+      summary: Inventory heatmap tiles.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: unit_type, in: query, schema: { type: string } }
+        - { name: segment, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/FlatTile' }
+
+  /flats/{id}/deep-dive:
+    get:
+      summary: Right-slide flat deep-dive panel data.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlatDeepDive' }
+
+  /projects/{id}/segments:
+    get:
+      summary: Buyer segment matrix + feature sensitivity.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SegmentInsights' }
+
+  /projects/{id}/action-recommendations:
+    get:
+      summary: Rule-based action cards for CXO action panel.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ActionRecommendation' }
+
+  /action-recommendations/{id}/status:
+    post:
+      summary: Mark a recommendation actioned/assigned.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [actioned, assigned] }
+      responses:
+        '200': { description: OK }
+
+  /sales/me/summary:
+    get:
+      summary: Individual salesperson dashboard.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesSummary' }
+
+  /sales/team/summary:
+    get:
+      summary: Sales Head team view (sales_head only).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamSummary' }
+        '403':
+          description: Not a sales head
+
+  /admin/data-health:
+    get:
+      summary: AWAAS internal data health (awaas_admin only).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataHealth' }
+
+  /admin/render-comparison:
+    get:
+      summary: Pilot panoramic-vs-3D A/B metrics (awaas_admin only).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RenderComparison' }
+
+  /export/sessions.csv:
+    get:
+      summary: Session-level CSV export (PRD 7.8).
+      parameters:
+        - { name: project_id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv: {}
+
+  /export/events.csv:
+    get:
+      summary: Event-level CSV export (PRD 7.8).
+      parameters:
+        - { name: project_id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv: {}
