@@ -193,6 +193,7 @@ export async function getPlayers() {
       return {
         docId: doc.id,
         ...data,
+        createdAtMs: timestamp ? timestamp.toMillis() : 0,
         createdAt: timestamp
           ? timestamp.toDate().toLocaleString('en-IN', {
               day: '2-digit',

@@ -84,6 +84,11 @@ function UserTable({
     if (!sortState.key) return filtered
     const key = columnKeyMap[sortState.key] || sortState.key.toLowerCase()
     return [...filtered].sort((a, b) => {
+      // createdAt is a formatted display string; sort by the raw timestamp when available
+      if (key === 'createdAt' && (a.createdAtMs != null || b.createdAtMs != null)) {
+        const cmp = (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0)
+        return sortState.direction === 'asc' ? cmp : -cmp
+      }
       const av = String(a[key] ?? '').toLowerCase()
       const bv = String(b[key] ?? '').toLowerCase()
       const cmp = av.localeCompare(bv, undefined, { numeric: true })
