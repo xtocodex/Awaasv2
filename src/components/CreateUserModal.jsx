@@ -16,6 +16,13 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { getNextType } from '../firebase/userService'
 
+const roleMap = {
+  'Builder':       'builder',
+  'Sales Manager': 'sales_manager',
+  'Member':        'member',
+  'Sales Rep':     'member',
+}
+
 function CreateUserModal({ isOpen, onClose, onSubmit, role }) {
   const [nextTypeState, setNextTypeState] = useState({ mappedRole: '', value: '' })
   const [showPassword, setShowPassword] = useState(false)
@@ -40,11 +47,6 @@ function CreateUserModal({ isOpen, onClose, onSubmit, role }) {
       setShowConfirmPassword(false)
       return
     }
-    const roleMap = {
-      'Builder':       'builder',
-      'Sales Manager': 'sales_manager',
-      'Member':        'member',
-    }
     const mappedRole = roleMap[role]
     if (!mappedRole) return
 
@@ -60,11 +62,6 @@ function CreateUserModal({ isOpen, onClose, onSubmit, role }) {
     }
   }, [isOpen, role, reset])
 
-  const roleMap = {
-    'Builder':       'builder',
-    'Sales Manager': 'sales_manager',
-    'Member':        'member',
-  }
   const mappedRole = roleMap[role] ?? ''
   const nextType = nextTypeState.mappedRole === mappedRole ? nextTypeState.value : ''
   const typeLoading = Boolean(isOpen && mappedRole && !nextType)
