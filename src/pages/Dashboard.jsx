@@ -254,17 +254,31 @@ function Dashboard() {
         ? `${profile.email} | ${profile.company_name}`
         : profile?.email || 'admin@awaas.com'
 
+      // Members can also be created directly by the logged-in admin/builder/cxo,
+      // so merge those with the ones found through the sales-manager hierarchy
+      const mergeByDocId = (...lists) => {
+        const byId = new Map()
+        lists.flat().forEach(user => user?.docId && byId.set(user.docId, user))
+        return [...byId.values()]
+      }
+
       // We map admin permissions to system admin and fallback builder roles
       if (role === 'awaas_admin') {
-        const result = await getAllUsersUnderAdmin(createdBy)
+        const [result, directMembers] = await Promise.all([
+          getAllUsersUnderAdmin(createdBy),
+          getMembersBySalesManager(createdBy),
+        ])
         setData(prev => ({
           ...prev,
           builders: result.builders || [],
           salesManagers: result.salesManagers || [],
-          members: result.members || []
+          members: mergeByDocId(result.members || [], directMembers.users || [])
         }))
       } else if (role === 'builder' || role === 'cxo') {
-        const smsResult = await getSalesManagersByBuilder(createdBy)
+        const [smsResult, directMembers] = await Promise.all([
+          getSalesManagersByBuilder(createdBy),
+          getMembersBySalesManager(createdBy),
+        ])
         const smList = smsResult.users || []
         const memberGroups = await Promise.all(smList.map(sm => {
           const smCreatedBy = sm.company_name
@@ -272,7 +286,10 @@ function Dashboard() {
             : sm.email
           return getMembersBySalesManager(smCreatedBy)
         }))
-        const members = memberGroups.flatMap(result => result.users || [])
+        const members = mergeByDocId(
+          memberGroups.flatMap(result => result.users || []),
+          directMembers.users || []
+        )
         setData(prev => ({
           ...prev,
           builders: [],
